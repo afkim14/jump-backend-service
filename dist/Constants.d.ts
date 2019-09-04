@@ -1,4 +1,8 @@
 export declare const SOCKET_PORT = 8000;
+export declare const GET_DISPLAY_NAME = "GET_DISPLAY_NAME";
+export declare const DISPLAY_NAME = "DISPLAY_NAME";
+export declare const GET_USERS = "GET_USERS";
+export declare const USERS = "USERS";
 export declare const CREATE_ROOM = "CREATE_ROOM";
 export declare const CREATE_ROOM_SUCCESS = "CREATE_ROOM_SUCCESS";
 export declare const CONNECT_TO_ROOM = "CONNECT_TO_ROOM";
