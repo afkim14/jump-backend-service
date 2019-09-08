@@ -68,10 +68,6 @@ io.on('connection', client => {
      */
     client.on(Constants.CREATE_ROOM, (data: Types.CreateRoom) => {
         let roomid = uuid.v1(); // Generate random time-based id
-        // In case id already exists (highly unlikely in theory)
-        while (roomid in rooms) {
-            roomid = uuid.v1();
-        }
         rooms[roomid] = {
             owner: client.id,
             size: data.size,
@@ -100,31 +96,36 @@ io.on('connection', client => {
             return;
         }
 
-        // FIXME: I don't know the better way to do this if statement in .ts (if obj, get obj.props)
-        if (rooms[data.roomid]) {
-            const room = rooms[data.roomid];
-            if (Object.keys(room.connected).length < room.size) {
-                room.connected[client.id] = displayNames[client.id]; // Update user in rooms object
-                userRooms[client.id] = data.roomid; // Also update user in users object (redundant)
-                logInfo(`${displayNames[client.id]} connected to room ${data.roomid}`);
-                Object.keys(room.connected).forEach(socketid => {
-                    // Update all the other users in the room
-                    io.to(socketid).emit(Constants.USERS_CONNECTED, room.connected);
-                    if (Object.keys(room.connected).length === room.size) {
-                        // TODO: have not setup P2P stuff yet, but this would be where we send the needed data
-                        io.to(socketid).emit(Constants.ROOM_FULLY_CONNECTED, 'data to begin p2p from frontend');
-                    }
-                });
-                return;
-            }
+        const room = rooms[data.roomid] ? rooms[data.roomid] : null;
 
+        // Inexistent Room
+        if (!room) {
+            client.emit(Constants.CONNECT_TO_ROOM_FAIL, Constants.INVALID_ROOM);
+            logError(`${displayNames[client.id]} tried to connect to inexistent room: ${data.roomid}`);
+            return;
+        }
+
+        // Full Room
+        if (Object.keys(room.connected).length >= room.size) {
             client.emit(Constants.CONNECT_TO_ROOM_FAIL, Constants.FULL_ROOM_MSG);
             logError(`${displayNames[client.id]} tried to connect to full room ${data.roomid}`);
             return;
         }
 
-        client.emit(Constants.CONNECT_TO_ROOM_FAIL, Constants.INVALID_ROOM);
-        logError(`${displayNames[client.id]} tried to connect to inexistent room: ${data.roomid}`);
+        // Connect to room
+        room.connected[client.id] = displayNames[client.id]; // Update user in rooms object
+        userRooms[client.id] = data.roomid; // Also update user in users object (redundant)
+        logInfo(`${displayNames[client.id]} connected to room ${data.roomid}`);
+        let connectedUserIds = Object.keys(room.connected);
+        connectedUserIds.forEach(socketid => {
+            // Update all the other users in the room
+            io.to(socketid).emit(Constants.USERS_CONNECTED, room.connected);
+            if (connectedUserIds.length === room.size) {
+                // TODO: have not setup P2P stuff yet, but this would be where we send the needed data
+                io.to(socketid).emit(Constants.ROOM_FULLY_CONNECTED, 'data to begin p2p from frontend');
+            }
+        });
+        return;
     });
 
     /**
@@ -133,7 +134,6 @@ io.on('connection', client => {
      */
     client.on('disconnect', () => {
         // If user is connected to room, remove him from room and update everyone in room
-        // FIXME: I don't know the better way to do this if statement in .ts (if obj, get obj.props)
         if (userRooms[client.id]) {
             let roomid = userRooms[client.id];
             if (rooms[roomid]) {
