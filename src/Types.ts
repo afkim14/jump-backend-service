@@ -16,3 +16,17 @@ export type Room = {
     size: number;
     connected: UserDisplayMap;
 };
+
+// RTC STUFF
+export type SDP = {
+    sdp: RTCSessionDescription
+}
+
+export type RTCFileRequest = {
+    name: string,
+    size: number
+}
+
+export type RTCFileReply = {
+    accept: boolean
+}
