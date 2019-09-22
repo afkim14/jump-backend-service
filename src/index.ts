@@ -119,7 +119,7 @@ io.on('connection', client => {
 
         // Inexistent Room
         if (!room) {
-            client.emit(Constants.CONNECT_TO_ROOM_FAIL, Constants.INVALID_ROOM);
+            client.emit(Constants.CONNECT_TO_ROOM_FAIL, Constants.INVALID_ROOM_MSG);
             logError(`${displayNames[client.id]} tried to connect to inexistent room: ${data.roomid}`);
             return;
         }
@@ -135,7 +135,13 @@ io.on('connection', client => {
         room.connected[client.id] = displayNames[client.id]; // Update user in rooms object
         userRooms[client.id] = data.roomid; // Also update user in users object (redundant)
         logInfo(`${displayNames[client.id]} connected to room ${data.roomid}`);
-        sendSocketMsgToRoom(data.roomid, Constants.ROOM_INFO, room, '');
+        let connectedUserIds = Object.keys(room.connected);
+        connectedUserIds.forEach(socketid => {
+            io.to(socketid).emit(Constants.USERS_CONNECTED, room.connected);
+            if (connectedUserIds.length === room.size) {
+                io.to(socketid).emit(Constants.ROOM_STATUS, { full: true, owner: room.owner });
+            }
+        });
         return;
     });
 
@@ -196,7 +202,10 @@ io.on('connection', client => {
                 let connectedUserIds = Object.keys(room.connected);
                 if (connectedUserIds.length > 0) {
                     room.owner = connectedUserIds[0];
-                    sendSocketMsgToRoom(roomid, Constants.ROOM_INFO, room, '');
+                    connectedUserIds.forEach(userid => {
+                        io.to(userid).emit(Constants.USERS_CONNECTED, room.connected);
+                        io.to(userid).emit(Constants.ROOM_STATUS, { full: false, owner: room.owner });
+                    });
                 } else {
                     delete rooms[roomid];
                     logInfo(`Everyone left room ${roomid} and it has been closed.`);
