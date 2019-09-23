@@ -19,14 +19,14 @@ export type Room = {
 
 // RTC STUFF
 export type SDP = {
-    sdp: RTCSessionDescription
+    sdp: RTCSessionDescription;
 }
 
 export type RTCFileRequest = {
-    name: string,
-    size: number
+    name: string;
+    size: number;
 }
 
 export type RTCFileReply = {
-    accept: boolean
+    accept: boolean;
 }
