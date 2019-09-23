@@ -49,6 +49,25 @@ function generateRandomColor(): string {
     );
 }
 
+/**
+ * Sends socket message with data to everyone in the room
+ * If senderid is specified, only sender will not receive message.
+ *
+ * @param roomid - room to send socket message to
+ * @param msg - socket message to send
+ * @param data - data to send
+ * @param senderid - if value is included, doesn't send to sender.
+ */
+function sendSocketMsgToRoom(roomid: string, msg: string, data: any, senderid: string) {
+    const room = rooms[roomid];
+    let connectedUserIds = Object.keys(room.connected);
+    connectedUserIds.forEach(socketid => {
+        if (senderid !== socketid) {
+            io.to(socketid).emit(msg, data);
+        }
+    });
+}
+
 // Socket Connection
 
 const io = socketio();
@@ -100,7 +119,7 @@ io.on('connection', client => {
 
         // Inexistent Room
         if (!room) {
-            client.emit(Constants.CONNECT_TO_ROOM_FAIL, Constants.INVALID_ROOM);
+            client.emit(Constants.CONNECT_TO_ROOM_FAIL, Constants.INVALID_ROOM_MSG);
             logError(`${displayNames[client.id]} tried to connect to inexistent room: ${data.roomid}`);
             return;
         }
@@ -118,14 +137,49 @@ io.on('connection', client => {
         logInfo(`${displayNames[client.id]} connected to room ${data.roomid}`);
         let connectedUserIds = Object.keys(room.connected);
         connectedUserIds.forEach(socketid => {
-            // Update all the other users in the room
             io.to(socketid).emit(Constants.USERS_CONNECTED, room.connected);
             if (connectedUserIds.length === room.size) {
-                // TODO: have not setup P2P stuff yet, but this would be where we send the needed data
-                io.to(socketid).emit(Constants.ROOM_FULLY_CONNECTED, 'data to begin p2p from frontend');
+                io.to(socketid).emit(Constants.ROOM_STATUS, { full: true, owner: room.owner });
             }
         });
         return;
+    });
+
+    /**
+     * Receives SDP and sends to other users in the room.
+     */
+    client.on(Constants.RTC_DESCRIPTION_OFFER, (data: Types.SDP) => {
+        logInfo(`Received SDP from ${client.id}`);
+        sendSocketMsgToRoom(userRooms[client.id], Constants.RTC_DESCRIPTION_OFFER, data, client.id);
+    });
+
+    /**
+     * Receives reply SDP and sends to other users in the room.
+     */
+    client.on(Constants.RTC_DESCRIPTION_ANSWER, (data: Types.SDP) => {
+        logInfo(`Received reply SDP from ${client.id}`);
+        sendSocketMsgToRoom(userRooms[client.id], Constants.RTC_DESCRIPTION_ANSWER, data, client.id);
+    });
+
+    /**
+     * Receives ICE Candidate and sends to other users in the room.
+     */
+    client.on(Constants.ICE_CANDIDATE, (data: RTCIceCandidate) => {
+        logInfo(`Received ICE candidate ${data.candidate} from ${client.id}`);
+        sendSocketMsgToRoom(userRooms[client.id], Constants.ICE_CANDIDATE, data, client.id);
+    })
+
+    /**
+     * Receives file info and sends it to other users in the room
+     */
+    client.on(Constants.FILE_TRANSFER_REQUEST, (data: Types.RTCFileRequest) => {
+        logInfo(`Received file transfer request from ${client.id}`);
+        sendSocketMsgToRoom(userRooms[client.id], Constants.FILE_TRANSFER_REQUEST, data, client.id);
+    });
+
+    client.on(Constants.FILE_TRANSFER_REPLY, (data: Types.RTCFileRequest) => {
+        logInfo(`Received file transfer reply from ${client.id}`);
+        sendSocketMsgToRoom(userRooms[client.id], Constants.FILE_TRANSFER_REPLY, data, client.id);
     });
 
     /**
@@ -147,8 +201,10 @@ io.on('connection', client => {
                 // Update users in current room or delete room if empty.
                 let connectedUserIds = Object.keys(room.connected);
                 if (connectedUserIds.length > 0) {
+                    room.owner = connectedUserIds[0];
                     connectedUserIds.forEach(userid => {
                         io.to(userid).emit(Constants.USERS_CONNECTED, room.connected);
+                        io.to(userid).emit(Constants.ROOM_STATUS, { full: false, owner: room.owner });
                     });
                 } else {
                     delete rooms[roomid];
