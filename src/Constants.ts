@@ -11,6 +11,7 @@ export const CONNECT_TO_ROOM = 'CONNECT_TO_ROOM';
 export const CONNECT_TO_ROOM_FAIL = 'CONNECT_TO_ROOM_FAIL';
 export const USERS_CONNECTED = 'USERS_CONNECTED';
 export const ROOM_STATUS = 'ROOM_STATUS';
+export const SEND_ROOM_INVITES = 'SEND_ROOM_INVITES';
 
 // Socket Messages Data
 export const FULL_ROOM_MSG = 'Room Full';

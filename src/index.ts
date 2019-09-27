@@ -83,13 +83,13 @@ io.on('connection', client => {
     });
 
     /**
-     * Received when client presses 'Create Room' button with relevant information.
+     * Received when client clicks on another user.
      */
     client.on(Constants.CREATE_ROOM, (data: Types.CreateRoom) => {
         let roomid = uuid.v1(); // Generate random time-based id
         rooms[roomid] = {
             owner: client.id,
-            size: data.size,
+            size: data.receipients.length + 1,
             connected: {},
         };
 
@@ -143,6 +143,14 @@ io.on('connection', client => {
             }
         });
         return;
+    });
+
+    client.on(Constants.SEND_ROOM_INVITES, (users: Types.UserDisplayMap) => {
+        Object.keys(users).forEach(userid => {
+            if (userid !== client.id) {
+                io.to(userid).emit(Constants.SEND_ROOM_INVITES, { sender: displayNames[client.id] });
+            }
+        });
     });
 
     /**
