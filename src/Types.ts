@@ -1,4 +1,6 @@
-export type CreateRoom = { receipients: Array<UserDisplay> }; // data sent by frontend on room creation information
+export type CreateRoom = { 
+    invited: UserDisplayMap
+}; // data sent by frontend on room creation information
 export type ConnectRoom = { roomid: string }; // data sent by frontend to connect to specific room
 export type UserDisplayMap = { [userid: string]: UserDisplay }; // Map from userid to display name
 export type UserDisplay = {
@@ -16,6 +18,20 @@ export type Room = {
     size: number;
     connected: UserDisplayMap;
 };
+export type RoomInvite = {
+    invited: UserDisplayMap;
+    roomid: string;
+    initialMessage: Message;
+}
+export type RoomInviteResponse = {
+    invitedBy: UserDisplay;
+    respondedBy: UserDisplay;
+    roomid: string;
+}
+export type Message = {
+    sender: UserDisplay;
+    text: string;
+}
 
 // RTC STUFF
 export type SDP = {

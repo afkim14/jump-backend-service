@@ -89,7 +89,7 @@ io.on('connection', client => {
         let roomid = uuid.v1(); // Generate random time-based id
         rooms[roomid] = {
             owner: client.id,
-            size: data.receipients.length + 1,
+            size: Object.keys(data.invited).length,
             connected: {},
         };
 
@@ -145,12 +145,24 @@ io.on('connection', client => {
         return;
     });
 
-    client.on(Constants.SEND_ROOM_INVITES, (users: Types.UserDisplayMap) => {
-        Object.keys(users).forEach(userid => {
+    client.on(Constants.SEND_ROOM_INVITES, (roomInvite: Types.RoomInvite) => {
+        Object.keys(roomInvite.invited).forEach(userid => {
             if (userid !== client.id) {
-                io.to(userid).emit(Constants.SEND_ROOM_INVITES, { sender: displayNames[client.id] });
+                io.to(userid).emit(Constants.SEND_ROOM_INVITES, { 
+                    sender: displayNames[client.id], 
+                    roomid: roomInvite.roomid, initialMessage: 
+                    roomInvite.initialMessage 
+                });
             }
         });
+    });
+
+    client.on(Constants.REJECT_TRANSFER_REQUEST, (data: Types.RoomInviteResponse) => {
+        io.to(data.invitedBy.userid).emit(Constants.REJECT_TRANSFER_REQUEST, data);
+    });
+
+    client.on(Constants.ACCEPT_TRANSFER_REQUEST, (data: Types.RoomInviteResponse) => {
+        io.to(data.invitedBy.userid).emit(Constants.ACCEPT_TRANSFER_REQUEST, data);
     });
 
     /**
