@@ -41,12 +41,8 @@ function logError(error: string): void {
  * Returns random hex color
  */
 function generateRandomColor(): string {
-    return (
-        '#' +
-        Math.random()
-            .toString(16)
-            .slice(2, 8)
-    );
+    let colors = ['#FBE8A6']; // choose set of colors that fit with the color scheme
+    return colors[Math.floor(Math.random() * colors.length)];
 }
 
 /**
@@ -150,8 +146,9 @@ io.on('connection', client => {
             if (userid !== client.id) {
                 io.to(userid).emit(Constants.SEND_ROOM_INVITES, { 
                     sender: displayNames[client.id], 
-                    roomid: roomInvite.roomid, initialMessage: 
-                    roomInvite.initialMessage 
+                    roomid: roomInvite.roomid, 
+                    initialMessage: roomInvite.initialMessage,
+                    initialFile: roomInvite.initialFile
                 });
             }
         });
@@ -188,19 +185,6 @@ io.on('connection', client => {
         logInfo(`Received ICE candidate ${data.candidate} from ${client.id}`);
         sendSocketMsgToRoom(userRooms[client.id], Constants.ICE_CANDIDATE, data, client.id);
     })
-
-    /**
-     * Receives file info and sends it to other users in the room
-     */
-    client.on(Constants.FILE_TRANSFER_REQUEST, (data: Types.RTCFileRequest) => {
-        logInfo(`Received file transfer request from ${client.id}`);
-        sendSocketMsgToRoom(userRooms[client.id], Constants.FILE_TRANSFER_REQUEST, data, client.id);
-    });
-
-    client.on(Constants.FILE_TRANSFER_REPLY, (data: Types.RTCFileRequest) => {
-        logInfo(`Received file transfer reply from ${client.id}`);
-        sendSocketMsgToRoom(userRooms[client.id], Constants.FILE_TRANSFER_REPLY, data, client.id);
-    });
 
     /**
      * Called when user leaves Main Home page or refreshes browser.
