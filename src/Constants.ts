@@ -2,6 +2,7 @@ export const SOCKET_PORT = 8000;
 
 // Socket Messages
 export const GET_DISPLAY_NAME = 'GET_DISPLAY_NAME';
+export const SEARCH_USERS = 'SEARCH_USERS';
 export const DISPLAY_NAME = 'DISPLAY_NAME';
 export const GET_USERS = 'GET_USERS';
 export const USERS = 'USERS';

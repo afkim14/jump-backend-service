@@ -3,6 +3,7 @@ import * as rword from 'rword';
 import * as Constants from './Constants';
 import * as Types from './Types';
 import * as uuid from 'uuid';
+const TrieSearch = require('trie-search');
 
 /**
  * Important Notes:
@@ -16,6 +17,7 @@ import * as uuid from 'uuid';
 const displayNames: Types.UserDisplayMap = {};
 const userRooms: Types.UserRoomMap = {};
 const rooms: Types.RoomMap = {};
+let usersTrie = new TrieSearch('displayName');
 
 // Helper functions
 
@@ -74,8 +76,19 @@ io.on('connection', client => {
     client.on(Constants.GET_DISPLAY_NAME, () => {
         let displayName: string = (rword.rword.generate(2, { length: '2 - 6' }) as string[]).join('');
         displayNames[client.id] = { userid: client.id, displayName, color: generateRandomColor() };
+        usersTrie = new TrieSearch('displayName');
+        usersTrie.addAll(Object.values(displayNames));
+
+        // Update clients about new user
         client.emit(Constants.DISPLAY_NAME, displayNames[client.id]);
         io.emit(Constants.USERS, displayNames);
+    });
+
+    /**
+     * Received when client searches for another user
+     */
+    client.on(Constants.SEARCH_USERS, (searchTerm: string) => {
+        client.emit(Constants.SEARCH_USERS, usersTrie.get(searchTerm));
     });
 
     /**
@@ -219,6 +232,8 @@ io.on('connection', client => {
 
         logInfo(`${displayNames[client.id]} disconnected from Jump`);
         delete displayNames[client.id];
+        usersTrie = new TrieSearch('displayName');
+        usersTrie.addAll(Object.values(displayNames));
         io.emit(Constants.USERS, displayNames);
     });
 });
