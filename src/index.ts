@@ -3,6 +3,7 @@ import * as rword from 'rword';
 import * as Constants from './Constants';
 import * as Types from './Types';
 import * as uuid from 'uuid';
+const TrieSearch = require('trie-search');
 
 /**
  * Important Notes:
@@ -16,6 +17,7 @@ import * as uuid from 'uuid';
 const displayNames: Types.UserDisplayMap = {};
 const userRooms: Types.UserRoomMap = {};
 const rooms: Types.RoomMap = {};
+let usersTrie = new TrieSearch('displayName');
 
 // Helper functions
 
@@ -41,12 +43,8 @@ function logError(error: string): void {
  * Returns random hex color
  */
 function generateRandomColor(): string {
-    return (
-        '#' +
-        Math.random()
-            .toString(16)
-            .slice(2, 8)
-    );
+    let colors = ['#FBE8A6']; // choose set of colors that fit with the color scheme
+    return colors[Math.floor(Math.random() * colors.length)];
 }
 
 /**
@@ -60,9 +58,9 @@ function generateRandomColor(): string {
  */
 function sendSocketMsgToRoom(roomid: string, msg: string, data: any, senderid: string) {
     const room = rooms[roomid];
-    let connectedUserIds = Object.keys(room.connected);
-    connectedUserIds.forEach(socketid => {
-        if (senderid !== socketid) {
+    let invitedUserIds = Object.keys(room.invited);
+    invitedUserIds.forEach(socketid => {
+        if (senderid !== socketid && room.invited[socketid].accepted) {
             io.to(socketid).emit(msg, data);
         }
     });
@@ -75,24 +73,38 @@ io.on('connection', client => {
     /**
      * Received when client logs in as guest and sends display name and color
      */
-    client.on(Constants.GET_DISPLAY_NAME, () => {
+    client.on(Constants.LOGIN, () => {
         let displayName: string = (rword.rword.generate(2, { length: '2 - 6' }) as string[]).join('');
         displayNames[client.id] = { userid: client.id, displayName, color: generateRandomColor() };
+        usersTrie = new TrieSearch('displayName');
+        usersTrie.addAll(Object.values(displayNames));
+
+        // Update clients about new user
         client.emit(Constants.DISPLAY_NAME, displayNames[client.id]);
         io.emit(Constants.USERS, displayNames);
     });
 
     /**
-     * Received when client presses 'Create Room' button with relevant information.
+     * Received when client searches for another user
+     */
+    client.on(Constants.SEARCH_USERS, (searchTerm: string) => {
+        client.emit(Constants.SEARCH_USERS, usersTrie.get(searchTerm));
+    });
+
+    /**
+     * Received when client clicks on another user and presses connect.
      */
     client.on(Constants.CREATE_ROOM, (data: Types.CreateRoom) => {
-        let roomid = uuid.v1(); // Generate random time-based id
-        rooms[roomid] = {
+        const roomid = uuid.v1(); // Generate random time-based id
+        const newRoom = {
+            roomid: roomid,
             owner: client.id,
-            size: data.size,
-            connected: {},
+            requestSent: false,
+            invited: data.invited
         };
+        newRoom.invited[client.id].accepted = true;
 
+        rooms[roomid] = newRoom;
         client.emit(Constants.CREATE_ROOM_SUCCESS, { roomid });
         logInfo(`${client.id} has created room with id ${roomid}`);
     });
@@ -101,48 +113,80 @@ io.on('connection', client => {
      * Called when user goes directly to room link or right after owner has created room.
      */
     client.on(Constants.CONNECT_TO_ROOM, (data: Types.ConnectRoom) => {
-        /**
-         * Right now, since userid = socketid, a user can still technically open multiple rooms,
-         * each with a different socketid (multiple tabs).
-         * But a socketid should only be associated with one room.
-         */
-        if (userRooms[client.id]) {
-            logError(
-                `${displayNames[client.id]} is already connected to room ${
-                    userRooms[client.id]
-                } but tried to access room ${data.roomid}`,
-            );
-            return;
-        }
-
-        const room = rooms[data.roomid] ? rooms[data.roomid] : null;
-
-        // Inexistent Room
-        if (!room) {
-            client.emit(Constants.CONNECT_TO_ROOM_FAIL, Constants.INVALID_ROOM_MSG);
-            logError(`${displayNames[client.id]} tried to connect to inexistent room: ${data.roomid}`);
-            return;
-        }
-
-        // Full Room
-        if (Object.keys(room.connected).length >= room.size) {
-            client.emit(Constants.CONNECT_TO_ROOM_FAIL, Constants.FULL_ROOM_MSG);
-            logError(`${displayNames[client.id]} tried to connect to full room ${data.roomid}`);
-            return;
-        }
-
         // Connect to room
-        room.connected[client.id] = displayNames[client.id]; // Update user in rooms object
-        userRooms[client.id] = data.roomid; // Also update user in users object (redundant)
+        userRooms[client.id] ? userRooms[client.id].push(data.roomid) : userRooms[client.id] = [data.roomid];
+
+        // Update room
+        const room = rooms[data.roomid];
+        room.invited[client.id].accepted = true;
         logInfo(`${displayNames[client.id]} connected to room ${data.roomid}`);
-        let connectedUserIds = Object.keys(room.connected);
-        connectedUserIds.forEach(socketid => {
-            io.to(socketid).emit(Constants.USERS_CONNECTED, room.connected);
-            if (connectedUserIds.length === room.size) {
-                io.to(socketid).emit(Constants.ROOM_STATUS, { full: true, owner: room.owner });
+        let invitedUserIds = Object.keys(room.invited);
+        invitedUserIds.forEach(socketid => {
+            if (room.invited[socketid].accepted) {
+                io.to(socketid).emit(Constants.ROOM_STATUS, {
+                    type: Constants.USER_CONNECT,
+                    roomid: data.roomid,
+                    full: invitedUserIds.every((userid) => { return room.invited[userid].accepted }),
+                    owner: room.owner,
+                    userid: client.id
+                });
             }
         });
         return;
+    });
+
+    client.on(Constants.SEND_ROOM_INVITES, (roomInvite: Types.RoomInvite) => {
+        Object.keys(rooms[roomInvite.roomid].invited).forEach(userid => {
+            if (userid !== client.id) {
+                io.to(userid).emit(Constants.SEND_ROOM_INVITES, { 
+                    sender: displayNames[client.id], 
+                    roomid: roomInvite.roomid
+                });
+            }
+        });
+    });
+
+    client.on(Constants.REJECT_TRANSFER_REQUEST, (data: Types.RoomInviteResponse) => {
+        const room = rooms[data.roomid];
+        let invitedUserIds = Object.keys(room.invited);
+        invitedUserIds.forEach(socketid => {
+            if (room.invited[socketid].accepted) {
+                io.to(socketid).emit(Constants.ROOM_STATUS, {
+                    type: Constants.USER_DISCONNECT,
+                    roomid: data.roomid,
+                    invited: room.invited,
+                    full: invitedUserIds.every((userid) => { return room.invited[userid].accepted }),
+                    owner: room.owner,
+                    userid: client.id
+                });
+            }
+        });
+    });
+
+    client.on(Constants.ACCEPT_TRANSFER_REQUEST, (data: Types.RoomInviteResponse) => {
+        const room = rooms[data.roomid];
+        room.invited[client.id].accepted = true;
+        let invitedUserIds = Object.keys(room.invited);
+        invitedUserIds.forEach(socketid => {
+            if (room.invited[socketid].accepted) {
+                io.to(socketid).emit(Constants.ROOM_STATUS, {
+                    type: Constants.USER_CONNECT,
+                    roomid: data.roomid,
+                    invited: room.invited,
+                    full: invitedUserIds.every((userid) => { return room.invited[userid].accepted }),
+                    owner: room.owner,
+                    userid: client.id
+                });
+            }
+        });
+    });
+
+    client.on(Constants.FILE_ACCEPT, (data: { sender: Types.UserDisplay, roomid: string, fileid: string }) => {
+        io.to(data.sender.userid).emit(Constants.FILE_ACCEPT, { roomid: data.roomid, fileid: data.fileid });
+    });
+
+    client.on(Constants.FILE_REJECT, (data: { sender: Types.UserDisplay, roomid: string, fileid: string }) => {
+        io.to(data.sender.userid).emit(Constants.FILE_REJECT, { roomid: data.roomid,fileid: data.fileid });
     });
 
     /**
@@ -150,7 +194,7 @@ io.on('connection', client => {
      */
     client.on(Constants.RTC_DESCRIPTION_OFFER, (data: Types.SDP) => {
         logInfo(`Received SDP from ${client.id}`);
-        sendSocketMsgToRoom(userRooms[client.id], Constants.RTC_DESCRIPTION_OFFER, data, client.id);
+        sendSocketMsgToRoom(data.roomid, Constants.RTC_DESCRIPTION_OFFER, data, client.id);
     });
 
     /**
@@ -158,63 +202,58 @@ io.on('connection', client => {
      */
     client.on(Constants.RTC_DESCRIPTION_ANSWER, (data: Types.SDP) => {
         logInfo(`Received reply SDP from ${client.id}`);
-        sendSocketMsgToRoom(userRooms[client.id], Constants.RTC_DESCRIPTION_ANSWER, data, client.id);
+        sendSocketMsgToRoom(data.roomid, Constants.RTC_DESCRIPTION_ANSWER, data, client.id);
     });
 
     /**
      * Receives ICE Candidate and sends to other users in the room.
      */
-    client.on(Constants.ICE_CANDIDATE, (data: RTCIceCandidate) => {
+    client.on(Constants.ICE_CANDIDATE, (data: Types.IceCandidate) => {
         logInfo(`Received ICE candidate ${data.candidate} from ${client.id}`);
-        sendSocketMsgToRoom(userRooms[client.id], Constants.ICE_CANDIDATE, data, client.id);
+        sendSocketMsgToRoom(data.roomid, Constants.ICE_CANDIDATE, data, client.id);
     })
-
-    /**
-     * Receives file info and sends it to other users in the room
-     */
-    client.on(Constants.FILE_TRANSFER_REQUEST, (data: Types.RTCFileRequest) => {
-        logInfo(`Received file transfer request from ${client.id}`);
-        sendSocketMsgToRoom(userRooms[client.id], Constants.FILE_TRANSFER_REQUEST, data, client.id);
-    });
-
-    client.on(Constants.FILE_TRANSFER_REPLY, (data: Types.RTCFileRequest) => {
-        logInfo(`Received file transfer reply from ${client.id}`);
-        sendSocketMsgToRoom(userRooms[client.id], Constants.FILE_TRANSFER_REPLY, data, client.id);
-    });
 
     /**
      * Called when user leaves Main Home page or refreshes browser.
      * Important note: a new socketid will be generated the next time user tries to join/create room.
      */
     client.on('disconnect', () => {
-        // If user is connected to room, remove him from room and update everyone in room
+        // Remove user from connected rooms and update users in those rooms
         if (userRooms[client.id]) {
-            let roomid = userRooms[client.id];
-            if (rooms[roomid]) {
-                const room = rooms[roomid];
-                // Remove from room
-                delete room.connected[client.id];
-                // Remove from connected users list
-                delete userRooms[client.id];
-                logInfo(`${displayNames[client.id]} disconnected from room ${roomid}`);
+            userRooms[client.id].forEach((roomid) => {
+                if (rooms[roomid]) {
+                    const room = rooms[roomid];
+                    // Remove from room
+                    delete room.invited[client.id];
+                    logInfo(`${displayNames[client.id]} disconnected from room ${roomid}`);
 
-                // Update users in current room or delete room if empty.
-                let connectedUserIds = Object.keys(room.connected);
-                if (connectedUserIds.length > 0) {
-                    room.owner = connectedUserIds[0];
-                    connectedUserIds.forEach(userid => {
-                        io.to(userid).emit(Constants.USERS_CONNECTED, room.connected);
-                        io.to(userid).emit(Constants.ROOM_STATUS, { full: false, owner: room.owner });
-                    });
-                } else {
-                    delete rooms[roomid];
-                    logInfo(`Everyone left room ${roomid} and it has been closed.`);
+                    // Update users in current room or delete room if empty.
+                    let invitedUserIds = Object.keys(room.invited);
+                    if (invitedUserIds.length > 0) {
+                        invitedUserIds.forEach(socketid => {
+                            if (room.invited[socketid].accepted) {
+                                io.to(socketid).emit(Constants.ROOM_STATUS, {
+                                    type: Constants.USER_DISCONNECT,
+                                    roomid: roomid,
+                                    invited: room.invited,
+                                    full: invitedUserIds.every((userid) => { return room.invited[userid].accepted }),
+                                    owner: room.owner,
+                                    userid: client.id
+                                });
+                            }
+                        });
+                    } else {
+                        delete rooms[roomid];
+                        logInfo(`Everyone left room ${roomid} and it has been closed.`);
+                    }
                 }
-            }
+            });
         }
 
         logInfo(`${displayNames[client.id]} disconnected from Jump`);
         delete displayNames[client.id];
+        usersTrie = new TrieSearch('displayName');
+        usersTrie.addAll(Object.values(displayNames));
         io.emit(Constants.USERS, displayNames);
     });
 });
