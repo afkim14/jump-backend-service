@@ -1,5 +1,5 @@
 export type CreateRoom = { 
-    invited: UserDisplayMap
+    invited: ConnectedUserMap
 }; // data sent by frontend on room creation information
 export type ConnectRoom = { roomid: string }; // data sent by frontend to connect to specific room
 export type UserDisplayMap = { [userid: string]: UserDisplay }; // Map from userid to display name
@@ -10,19 +10,17 @@ export type UserDisplay = {
     color: string;
 };
 
-export type UserRoomMap = { [userid: string]: string }; // Map from userid to roomid (needed to handle disconnects)
+export type UserRoomMap = { [userid: string]: string[] }; // Map from userid to all connected roomids
+export type ConnectedUserMap = { [userid: string]: { accepted: boolean; displayName: UserDisplay } };
 export type RoomMap = { [roomid: string]: Room }; // All open rooms and relevant information
 export type Room = {
-    // room information; connected is an array of userids.
+    roomid: string;
     owner: string;
-    size: number;
-    connected: UserDisplayMap;
+    requestSent: boolean;
+    invited: ConnectedUserMap;
 };
 export type RoomInvite = {
-    invited: UserDisplayMap;
     roomid: string;
-    initialMessage: Message;
-    initialFile: File;
 }
 export type RoomInviteResponse = {
     invitedBy: UserDisplay;
@@ -35,13 +33,23 @@ export type Message = {
 }
 
 export type File = {
+    id: string;
     sender: UserDisplay;
-    fileName: string;
-    fileSize: number;
+    name: string;
+    size: number;
+    anchorDownloadHref: string;
+    anchorDownloadFileName: string;
+    accepted: boolean;
     completed: boolean;
 }
 
 // RTC STUFF
 export type SDP = {
     sdp: RTCSessionDescription;
+    roomid: string;
+}
+
+export type IceCandidate = {
+    candidate: RTCIceCandidate;
+    roomid: string;
 }
