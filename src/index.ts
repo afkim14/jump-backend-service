@@ -66,6 +66,35 @@ function sendSocketMsgToRoom(roomid: string, msg: string, data: any, senderid: s
     });
 }
 
+function handleLeaveRoom(roomid: string, userid: string) {
+    if (rooms[roomid]) {
+        const room = rooms[roomid];
+        // Remove from room
+        delete room.invited[userid];
+        logInfo(`${displayNames[userid]} disconnected from room ${roomid}`);
+
+        // Update users in current room or delete room if empty.
+        let invitedUserIds = Object.keys(room.invited);
+        if (invitedUserIds.length > 0) {
+            invitedUserIds.forEach(socketid => {
+                if (room.invited[socketid].accepted) {
+                    io.to(socketid).emit(Constants.ROOM_STATUS, {
+                        type: Constants.USER_DISCONNECT,
+                        roomid: roomid,
+                        invited: room.invited,
+                        full: invitedUserIds.every((userid) => { return room.invited[userid].accepted }),
+                        owner: room.owner,
+                        userid: userid
+                    });
+                }
+            });
+        } else {
+            delete rooms[roomid];
+            logInfo(`Everyone left room ${roomid} and it has been closed.`);
+        }
+    }
+}
+
 // Socket Connection
 
 const io = socketio();
@@ -133,6 +162,13 @@ io.on('connection', client => {
             }
         });
         return;
+    });
+
+    /**
+     * Called when user leaves room
+     */
+    client.on(Constants.LEAVE_ROOM, (data: Types.LeaveRoom) => {
+        handleLeaveRoom(data.roomid, client.id);
     });
 
     client.on(Constants.SEND_ROOM_INVITES, (roomInvite: Types.RoomInvite) => {
@@ -221,32 +257,7 @@ io.on('connection', client => {
         // Remove user from connected rooms and update users in those rooms
         if (userRooms[client.id]) {
             userRooms[client.id].forEach((roomid) => {
-                if (rooms[roomid]) {
-                    const room = rooms[roomid];
-                    // Remove from room
-                    delete room.invited[client.id];
-                    logInfo(`${displayNames[client.id]} disconnected from room ${roomid}`);
-
-                    // Update users in current room or delete room if empty.
-                    let invitedUserIds = Object.keys(room.invited);
-                    if (invitedUserIds.length > 0) {
-                        invitedUserIds.forEach(socketid => {
-                            if (room.invited[socketid].accepted) {
-                                io.to(socketid).emit(Constants.ROOM_STATUS, {
-                                    type: Constants.USER_DISCONNECT,
-                                    roomid: roomid,
-                                    invited: room.invited,
-                                    full: invitedUserIds.every((userid) => { return room.invited[userid].accepted }),
-                                    owner: room.owner,
-                                    userid: client.id
-                                });
-                            }
-                        });
-                    } else {
-                        delete rooms[roomid];
-                        logInfo(`Everyone left room ${roomid} and it has been closed.`);
-                    }
-                }
+                handleLeaveRoom(roomid, client.id);
             });
         }
 
