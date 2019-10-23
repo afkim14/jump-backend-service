@@ -2,6 +2,7 @@ export type CreateRoom = {
     invited: ConnectedUserMap
 }; // data sent by frontend on room creation information
 export type ConnectRoom = { roomid: string }; // data sent by frontend to connect to specific room
+export type LeaveRoom = { roomid: string };
 export type UserDisplayMap = { [userid: string]: UserDisplay }; // Map from userid to display name
 export type UserDisplay = {
     // user information
