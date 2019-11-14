@@ -75,7 +75,11 @@ function handleLeaveRoom(roomid: string, userid: string) {
 
         // Update users in current room or delete room if empty.
         let invitedUserIds = Object.keys(room.invited);
-        if (invitedUserIds.length > 0) {
+        if (invitedUserIds.length === 1) {
+            io.to(invitedUserIds[0]).emit(Constants.LEAVE_ROOM, { roomid: roomid });
+            delete rooms[roomid];
+            logInfo(`Everyone left room ${roomid} and it has been closed.`);
+        } else {
             invitedUserIds.forEach(socketid => {
                 if (room.invited[socketid].accepted) {
                     io.to(socketid).emit(Constants.ROOM_STATUS, {
@@ -88,9 +92,6 @@ function handleLeaveRoom(roomid: string, userid: string) {
                     });
                 }
             });
-        } else {
-            delete rooms[roomid];
-            logInfo(`Everyone left room ${roomid} and it has been closed.`);
         }
     }
 }
