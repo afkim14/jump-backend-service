@@ -86,9 +86,11 @@ function handleLeaveRoom(roomid: string, userid: string) {
                         type: Constants.USER_DISCONNECT,
                         roomid: roomid,
                         invited: room.invited,
-                        full: invitedUserIds.every((userid) => { return room.invited[userid].accepted }),
+                        full: invitedUserIds.every(userid => {
+                            return room.invited[userid].accepted;
+                        }),
                         owner: room.owner,
-                        userid: userid
+                        userid: userid,
                     });
                 }
             });
@@ -130,7 +132,7 @@ io.on('connection', client => {
             roomid: roomid,
             owner: client.id,
             requestSent: false,
-            invited: data.invited
+            invited: data.invited,
         };
         newRoom.invited[client.id].accepted = true;
 
@@ -144,7 +146,7 @@ io.on('connection', client => {
      */
     client.on(Constants.CONNECT_TO_ROOM, (data: Types.ConnectRoom) => {
         // Connect to room
-        userRooms[client.id] ? userRooms[client.id].push(data.roomid) : userRooms[client.id] = [data.roomid];
+        userRooms[client.id] ? userRooms[client.id].push(data.roomid) : (userRooms[client.id] = [data.roomid]);
 
         // Update room
         const room = rooms[data.roomid];
@@ -156,9 +158,11 @@ io.on('connection', client => {
                 io.to(socketid).emit(Constants.ROOM_STATUS, {
                     type: Constants.USER_CONNECT,
                     roomid: data.roomid,
-                    full: invitedUserIds.every((userid) => { return room.invited[userid].accepted }),
+                    full: invitedUserIds.every(userid => {
+                        return room.invited[userid].accepted;
+                    }),
                     owner: room.owner,
-                    userid: client.id
+                    userid: client.id,
                 });
             }
         });
@@ -175,9 +179,9 @@ io.on('connection', client => {
     client.on(Constants.SEND_ROOM_INVITES, (roomInvite: Types.RoomInvite) => {
         Object.keys(rooms[roomInvite.roomid].invited).forEach(userid => {
             if (userid !== client.id) {
-                io.to(userid).emit(Constants.SEND_ROOM_INVITES, { 
-                    sender: displayNames[client.id], 
-                    roomid: roomInvite.roomid
+                io.to(userid).emit(Constants.SEND_ROOM_INVITES, {
+                    sender: displayNames[client.id],
+                    roomid: roomInvite.roomid,
                 });
             }
         });
@@ -192,9 +196,11 @@ io.on('connection', client => {
                     type: Constants.USER_DISCONNECT,
                     roomid: data.roomid,
                     invited: room.invited,
-                    full: invitedUserIds.every((userid) => { return room.invited[userid].accepted }),
+                    full: invitedUserIds.every(userid => {
+                        return room.invited[userid].accepted;
+                    }),
                     owner: room.owner,
-                    userid: client.id
+                    userid: client.id,
                 });
             }
         });
@@ -210,20 +216,26 @@ io.on('connection', client => {
                     type: Constants.USER_CONNECT,
                     roomid: data.roomid,
                     invited: room.invited,
-                    full: invitedUserIds.every((userid) => { return room.invited[userid].accepted }),
+                    full: invitedUserIds.every(userid => {
+                        return room.invited[userid].accepted;
+                    }),
                     owner: room.owner,
-                    userid: client.id
+                    userid: client.id,
                 });
             }
         });
     });
 
-    client.on(Constants.FILE_ACCEPT, (data: { sender: Types.UserDisplay, roomid: string, fileid: string }) => {
+    client.on(Constants.SEND_FILE_REQUEST, (data: { sender: Types.UserDisplay; roomid: string; fileSize: number }) => {
+        sendSocketMsgToRoom(data.roomid, Constants.SEND_FILE_REQUEST, data, client.id);
+    });
+
+    client.on(Constants.FILE_ACCEPT, (data: { sender: Types.UserDisplay; roomid: string; fileid: string }) => {
         io.to(data.sender.userid).emit(Constants.FILE_ACCEPT, { roomid: data.roomid, fileid: data.fileid });
     });
 
-    client.on(Constants.FILE_REJECT, (data: { sender: Types.UserDisplay, roomid: string, fileid: string }) => {
-        io.to(data.sender.userid).emit(Constants.FILE_REJECT, { roomid: data.roomid,fileid: data.fileid });
+    client.on(Constants.FILE_REJECT, (data: { sender: Types.UserDisplay; roomid: string; fileid: string }) => {
+        io.to(data.sender.userid).emit(Constants.FILE_REJECT, { roomid: data.roomid, fileid: data.fileid });
     });
 
     /**
@@ -248,7 +260,7 @@ io.on('connection', client => {
     client.on(Constants.ICE_CANDIDATE, (data: Types.IceCandidate) => {
         logInfo(`Received ICE candidate ${data.candidate} from ${client.id}`);
         sendSocketMsgToRoom(data.roomid, Constants.ICE_CANDIDATE, data, client.id);
-    })
+    });
 
     /**
      * Called when user leaves Main Home page or refreshes browser.
@@ -257,7 +269,7 @@ io.on('connection', client => {
     client.on('disconnect', () => {
         // Remove user from connected rooms and update users in those rooms
         if (userRooms[client.id]) {
-            userRooms[client.id].forEach((roomid) => {
+            userRooms[client.id].forEach(roomid => {
                 handleLeaveRoom(roomid, client.id);
             });
         }
