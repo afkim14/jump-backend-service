@@ -226,9 +226,12 @@ io.on('connection', client => {
         });
     });
 
-    client.on(Constants.SEND_FILE_REQUEST, (data: { sender: Types.UserDisplay; roomid: string; fileSize: number }) => {
-        sendSocketMsgToRoom(data.roomid, Constants.SEND_FILE_REQUEST, data, client.id);
-    });
+    client.on(
+        Constants.SEND_FILE_REQUEST,
+        (data: { sender: Types.UserDisplay; roomid: string; fileSize: number; fileName: string }) => {
+            sendSocketMsgToRoom(data.roomid, Constants.SEND_FILE_REQUEST, data, client.id);
+        },
+    );
 
     client.on(Constants.FILE_ACCEPT, (data: { sender: Types.UserDisplay; roomid: string; fileid: string }) => {
         io.to(data.sender.userid).emit(Constants.FILE_ACCEPT, { roomid: data.roomid, fileid: data.fileid });
