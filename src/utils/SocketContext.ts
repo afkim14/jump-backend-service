@@ -4,4 +4,4 @@ const io = socketio();
 
 io.listen(process.env.SOCKET_IO_PORT || Constants.SOCKET_PORT);
 
-export default socket;
+export default io;

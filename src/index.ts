@@ -2,9 +2,9 @@ import io from './utils/SocketContext';
 import * as Constants from './utils/Constants';
 import * as Types from './utils/Types';
 
-const RoomService = require('./services/RoomService');
-const Logger = require('./services/Logger');
-const UserService = require('./services/UserService');
+import { RoomService } from './services/RoomService';
+import { Logger } from './services/Logger';
+import { UserService } from './services/UserService';
 const roomService = new RoomService();
 const logger = new Logger('server');
 const userService = new UserService();
@@ -57,9 +57,7 @@ io.on('connection', (client: any) => {
      * Received when client searches for another user
      */
     client.on(Constants.SEARCH_USERS, (searchTerm: string) => {
-        client.emit(Constants.USERS, searchTerm === '' 
-            ? userService.getRandomUsers() 
-            : userService.searchUsers(searchTerm));
+        client.emit(Constants.SEARCH_USERS, userService.searchUsers(searchTerm));
     });
 
     /**
@@ -67,7 +65,7 @@ io.on('connection', (client: any) => {
      */
     client.on(Constants.CREATE_ROOM, (data: Types.CreateRoom) => {
         let newRoomId = roomService.createRoom(client.id, data.invited);
-        client.emit(Constants.CREATE_ROOM_SUCCESS, { newRoomId });
+        client.emit(Constants.CREATE_ROOM_SUCCESS, { roomId: newRoomId });
     });
 
     /**
@@ -91,81 +89,50 @@ io.on('connection', (client: any) => {
     });
 
     client.on(Constants.REJECT_TRANSFER_REQUEST, (data: Types.RoomInviteResponse) => {
-        const room = rooms[data.roomid];
-        let invitedUserIds = Object.keys(room.invited);
-        invitedUserIds.forEach(socketid => {
-            if (room.invited[socketid].accepted) {
-                io.to(socketid).emit(Constants.ROOM_STATUS, {
-                    type: Constants.USER_DISCONNECT,
-                    roomid: data.roomid,
-                    invited: room.invited,
-                    full: invitedUserIds.every(userid => {
-                        return room.invited[userid].accepted;
-                    }),
-                    owner: room.owner,
-                    userid: client.id,
-                });
-            }
-        });
+        roomService.rejectTransferRequest(data.roomId, client.id);
     });
 
     client.on(Constants.ACCEPT_TRANSFER_REQUEST, (data: Types.RoomInviteResponse) => {
-        const room = rooms[data.roomid];
-        room.invited[client.id].accepted = true;
-        let invitedUserIds = Object.keys(room.invited);
-        invitedUserIds.forEach(socketid => {
-            if (room.invited[socketid].accepted) {
-                io.to(socketid).emit(Constants.ROOM_STATUS, {
-                    type: Constants.USER_CONNECT,
-                    roomid: data.roomid,
-                    invited: room.invited,
-                    full: invitedUserIds.every(userid => {
-                        return room.invited[userid].accepted;
-                    }),
-                    owner: room.owner,
-                    userid: client.id,
-                });
-            }
-        });
+        roomService.acceptTransferRequest(data.roomId, client.id);
     });
 
     client.on(
         Constants.SEND_FILE_REQUEST,
-        (data: { sender: Types.UserDisplay; roomid: string; fileSize: number; fileName: string }) => {
-            sendSocketMsgToRoom(data.roomid, Constants.SEND_FILE_REQUEST, data, client.id);
+        (data: { sender: Types.UserDisplay; roomId: string; fileSize: number; fileName: string }) => {
+            sendSocketMsgToRoom(data.roomId, Constants.SEND_FILE_REQUEST, data, client.id);
         },
     );
 
-    client.on(Constants.FILE_ACCEPT, (data: { sender: Types.UserDisplay; roomid: string; fileid: string }) => {
-        io.to(data.sender.userid).emit(Constants.FILE_ACCEPT, { roomid: data.roomid, fileid: data.fileid });
+    client.on(Constants.FILE_ACCEPT, (data: { sender: Types.UserDisplay; roomId: string; fileId: string }) => {
+        io.to(data.sender.userId).emit(Constants.FILE_ACCEPT, { roomId: data.roomId, fileId: data.fileId });
     });
 
-    client.on(Constants.FILE_REJECT, (data: { sender: Types.UserDisplay; roomid: string; fileid: string }) => {
-        io.to(data.sender.userid).emit(Constants.FILE_REJECT, { roomid: data.roomid, fileid: data.fileid });
+    client.on(Constants.FILE_REJECT, (data: { sender: Types.UserDisplay; roomId: string; fileId: string }) => {
+        io.to(data.sender.userId).emit(Constants.FILE_REJECT, { roomId: data.roomId, fileId: data.fileId });
     });
 
     /**
      * Receives SDP and sends to other users in the room.
      */
     client.on(Constants.RTC_DESCRIPTION_OFFER, (data: Types.SDP) => {
-        logInfo(`Received SDP from ${client.id}`);
-        sendSocketMsgToRoom(data.roomid, Constants.RTC_DESCRIPTION_OFFER, data, client.id);
+        logger.logInfo(`Received SDP from ${client.id}`);
+        sendSocketMsgToRoom(data.roomId, Constants.RTC_DESCRIPTION_OFFER, data, client.id);
     });
 
     /**
      * Receives reply SDP and sends to other users in the room.
      */
     client.on(Constants.RTC_DESCRIPTION_ANSWER, (data: Types.SDP) => {
-        logInfo(`Received reply SDP from ${client.id}`);
-        sendSocketMsgToRoom(data.roomid, Constants.RTC_DESCRIPTION_ANSWER, data, client.id);
+        logger.logInfo(`Received reply SDP from ${client.id}`);
+        sendSocketMsgToRoom(data.roomId, Constants.RTC_DESCRIPTION_ANSWER, data, client.id);
     });
 
     /**
      * Receives ICE Candidate and sends to other users in the room.
      */
     client.on(Constants.ICE_CANDIDATE, (data: Types.IceCandidate) => {
-        logInfo(`Received ICE candidate ${data.candidate} from ${client.id}`);
-        sendSocketMsgToRoom(data.roomid, Constants.ICE_CANDIDATE, data, client.id);
+        logger.logInfo(`Received ICE candidate ${data.candidate} from ${client.id}`);
+        sendSocketMsgToRoom(data.roomId, Constants.ICE_CANDIDATE, data, client.id);
     });
 
     /**
@@ -175,18 +142,13 @@ io.on('connection', (client: any) => {
     client.on('disconnect', () => {
         // Remove user from connected rooms and update users in those rooms
         if (userRooms[client.id]) {
-            userRooms[client.id].forEach(roomid => {
-                handleLeaveRoom(roomid, client.id);
+            userRooms[client.id].forEach(roomId => {
+                roomService.handleLeaveRoom(roomId, client.id);
             });
         }
 
-        logInfo(`${displayNames[client.id]} disconnected from Jump`);
-        delete displayNames[client.id];
-        usersTrie = new TrieSearch('displayName');
-        usersTrie.addAll(Object.values(displayNames));
-        io.emit(Constants.USERS, displayNames);
+        userService.disconnectUser(client.id);
     });
 });
 
-io.listen(process.env.SOCKET_IO_PORT || Constants.SOCKET_PORT);
-logInfo(`socket.io server listening on ${process.env.SOCKET_IO_PORT || Constants.SOCKET_PORT}`);
+logger.logInfo(`socket.io server listening on ${process.env.SOCKET_IO_PORT || Constants.SOCKET_PORT}`);

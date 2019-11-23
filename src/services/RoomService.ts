@@ -2,7 +2,7 @@ import io from '../utils/SocketContext';
 import * as Constants from '../utils/Constants';
 import * as Types from '../utils/Types';
 import * as uuid from 'uuid';
-const Logger = require('./Logger');
+import { Logger } from './Logger';
 const logger = new Logger('room-service');
 
 export class RoomService {
@@ -49,7 +49,7 @@ export class RoomService {
      * @param roomId - room id user is connecting to
      */
     connectToRoom(userId: string, roomId: string) {
-        const room = this.rooms[roomId];
+        const room = this.getRoom(roomId);
         room.invited[userId].accepted = true;
         logger.logInfo(`${userId} connected to room ${roomId}`);
         let invitedUserIds = Object.keys(room.invited);
@@ -126,6 +126,57 @@ export class RoomService {
                 io.to(userId).emit(Constants.SEND_ROOM_INVITES, {
                     sender: owner,
                     roomId: roomId,
+                });
+            }
+        });
+    }
+
+    /**
+     * Rejects tranfer request
+     *
+     * @param roomId - room to reject request from
+     * @param ownerId - rejecter
+     */
+    rejectTransferRequest(roomId: string, ownerId: string) {
+        const room = this.getRoom(roomId);
+        let invitedUserIds = Object.keys(room.invited);
+        invitedUserIds.forEach(socketId => {
+            if (room.invited[socketId].accepted) {
+                io.to(socketId).emit(Constants.ROOM_STATUS, {
+                    type: Constants.USER_DISCONNECT,
+                    roomId: roomId,
+                    invited: room.invited,
+                    full: invitedUserIds.every(invitedUserId => {
+                        return room.invited[invitedUserId].accepted;
+                    }),
+                    owner: room.owner,
+                    userId: ownerId,
+                });
+            }
+        });
+    }
+
+    /**
+     * Accepts tranfer request
+     *
+     * @param roomId - room to accept request from
+     * @param ownerId - accepting user
+     */
+    acceptTransferRequest(roomId: string, ownerId: string) {
+        const room = this.getRoom(roomId);
+        room.invited[ownerId].accepted = true;
+        let invitedUserIds = Object.keys(room.invited);
+        invitedUserIds.forEach(socketid => {
+            if (room.invited[socketid].accepted) {
+                io.to(socketid).emit(Constants.ROOM_STATUS, {
+                    type: Constants.USER_CONNECT,
+                    roomId: roomId,
+                    invited: room.invited,
+                    full: invitedUserIds.every(invitedUserId => {
+                        return room.invited[invitedUserId].accepted;
+                    }),
+                    owner: room.owner,
+                    userId: ownerId,
                 });
             }
         });

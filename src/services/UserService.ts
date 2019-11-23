@@ -2,6 +2,8 @@ import io from '../utils/SocketContext';
 import * as rword from 'rword';
 import * as Constants from '../utils/Constants';
 import * as Types from '../utils/Types';
+import { Logger } from './Logger';
+const logger = new Logger('user-service');
 const TrieSearch = require('trie-search');
 
 /**
@@ -67,5 +69,14 @@ export class UserService {
      */
     getUser(userId: string) {
         return this.users[userId];
+    }
+
+    disconnectUser(userId: string) {
+        logger.logInfo(`${this.users[userId]} disconnected from Jump`);
+        delete this.users[userId];
+        usersTrie = new TrieSearch('displayName');
+        usersTrie.addAll(Object.values(this.users));
+        // TODO: This would refresh list of users every time someone disconnects
+        io.emit(Constants.USERS, this.getRandomUsers());
     }
 }
