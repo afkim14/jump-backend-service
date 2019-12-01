@@ -32,7 +32,7 @@ const userRooms: Types.UserRoomMap = {};
 function sendSocketMsgToRoom(roomId: string, msg: string, data: any, senderId: string) {
     const room = roomService.getRoom(roomId);
     let invitedUserIds = Object.keys(room.invited);
-    invitedUserIds.forEach(socketId => {
+    invitedUserIds.forEach((socketId: string) => {
         if (senderId !== socketId && room.invited[socketId].accepted) {
             io.to(socketId).emit(msg, data);
         }
