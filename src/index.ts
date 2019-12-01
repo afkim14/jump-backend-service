@@ -41,7 +41,7 @@ function sendSocketMsgToRoom(roomId: string, msg: string, data: any, senderId: s
 
 // Socket Connection
 
-io.on('connection', (client: any) => {
+io.on(Constants.CONNECTION, (client: SocketIO.Socket) => {
     /**
      * Received when client logs in as guest and sends display name and color
      */
@@ -74,7 +74,7 @@ io.on('connection', (client: any) => {
     client.on(Constants.CONNECT_TO_ROOM, (data: Types.ConnectRoom) => {
         roomService.connectToRoom(client.id, data.roomId)
         // Add room to user's list of connected rooms
-        userRooms[client.id] ? userRooms[client.id].push(data.roomId) : (userRooms[client.id] = [data.roomId]);
+        userRooms[client.id] = userRooms[client.id] ? [...userRooms[client.id], data.roomId] : [data.roomId];
     });
 
     /**
@@ -142,7 +142,7 @@ io.on('connection', (client: any) => {
     client.on('disconnect', () => {
         // Remove user from connected rooms and update users in those rooms
         if (userRooms[client.id]) {
-            userRooms[client.id].forEach(roomId => {
+            userRooms[client.id].forEach((roomId: string) => {
                 roomService.handleLeaveRoom(roomId, client.id);
             });
         }

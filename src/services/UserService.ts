@@ -32,7 +32,7 @@ export class UserService {
      * @param {string} socketId - user id
      */
     createNewUser(socketId: string) {
-        let displayName: string = (rword.rword.generate(2, { length: '2 - 6' }) as string[]).join('');
+        const displayName: string = (rword.rword.generate(2, { length: '2 - 6' }) as string[]).join('');
         this.users[socketId] = { userId: socketId, displayName, color: generateRandomColor() };
         usersTrie = new TrieSearch('displayName');
         usersTrie.addAll(Object.values(this.users));
@@ -41,6 +41,7 @@ export class UserService {
 
     /**
      * Gets a random number of users from the entire list of users
+     * TODO: This is temporary. We will want to get a RELEVANT subset of users (friends, common peers)
      */
     getRandomUsers() {
         const numUsers = 5;

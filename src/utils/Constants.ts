@@ -1,6 +1,7 @@
 export const SOCKET_PORT = 8000;
 
 // SOCKET MESSAGES
+export const CONNECTION = 'connection';
 export const LOGIN = 'LOGIN';
 export const SEARCH_USERS = 'SEARCH_USERS';
 export const DISPLAY_NAME = 'DISPLAY_NAME';

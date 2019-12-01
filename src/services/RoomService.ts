@@ -53,7 +53,7 @@ export class RoomService {
         room.invited[userId].accepted = true;
         logger.logInfo(`${userId} connected to room ${roomId}`);
         let invitedUserIds = Object.keys(room.invited);
-        invitedUserIds.forEach(socketId => {
+        invitedUserIds.forEach((socketId: string) => {
             if (room.invited[socketId].accepted) {
                 io.to(socketId).emit(Constants.ROOM_STATUS, {
                     type: Constants.USER_CONNECT,
@@ -97,13 +97,13 @@ export class RoomService {
                 this.deleteRoom(roomId);
                 logger.logInfo(`Everyone left room ${roomId} and it has been closed.`);
             } else {
-                invitedUserIds.forEach(socketId => {
+                invitedUserIds.forEach((socketId: string) => {
                     if (room.invited[socketId].accepted) {
                         io.to(socketId).emit(Constants.ROOM_STATUS, {
                             type: Constants.USER_DISCONNECT,
                             roomId: roomId,
                             invited: room.invited,
-                            full: invitedUserIds.every(invitedUserId => {
+                            full: invitedUserIds.every((invitedUserId: string) => {
                                 return room.invited[invitedUserId].accepted;
                             }),
                             owner: room.owner,
@@ -121,7 +121,7 @@ export class RoomService {
      * @param owner - owner of room
      */
     sendInvites(roomId: string, owner: Types.UserDisplay) {
-        Object.keys(this.rooms[roomId].invited).forEach(userId => {
+        Object.keys(this.rooms[roomId].invited).forEach((userId: string) => {
             if (userId !== owner.userId) {
                 io.to(userId).emit(Constants.SEND_ROOM_INVITES, {
                     sender: owner,
@@ -140,13 +140,13 @@ export class RoomService {
     rejectTransferRequest(roomId: string, ownerId: string) {
         const room = this.getRoom(roomId);
         let invitedUserIds = Object.keys(room.invited);
-        invitedUserIds.forEach(socketId => {
+        invitedUserIds.forEach((socketId: string) => {
             if (room.invited[socketId].accepted) {
                 io.to(socketId).emit(Constants.ROOM_STATUS, {
                     type: Constants.USER_DISCONNECT,
                     roomId: roomId,
                     invited: room.invited,
-                    full: invitedUserIds.every(invitedUserId => {
+                    full: invitedUserIds.every((invitedUserId: string) => {
                         return room.invited[invitedUserId].accepted;
                     }),
                     owner: room.owner,
@@ -166,13 +166,13 @@ export class RoomService {
         const room = this.getRoom(roomId);
         room.invited[ownerId].accepted = true;
         let invitedUserIds = Object.keys(room.invited);
-        invitedUserIds.forEach(socketid => {
+        invitedUserIds.forEach((socketid: string) => {
             if (room.invited[socketid].accepted) {
                 io.to(socketid).emit(Constants.ROOM_STATUS, {
                     type: Constants.USER_CONNECT,
                     roomId: roomId,
                     invited: room.invited,
-                    full: invitedUserIds.every(invitedUserId => {
+                    full: invitedUserIds.every((invitedUserId: string) => {
                         return room.invited[invitedUserId].accepted;
                     }),
                     owner: room.owner,
