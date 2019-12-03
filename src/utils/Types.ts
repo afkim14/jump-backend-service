@@ -1,32 +1,32 @@
 export type CreateRoom = { 
     invited: ConnectedUserMap
 }; // data sent by frontend on room creation information
-export type ConnectRoom = { roomid: string }; // data sent by frontend to connect to specific room
-export type LeaveRoom = { roomid: string };
-export type UserDisplayMap = { [userid: string]: UserDisplay }; // Map from userid to display name
+export type ConnectRoom = { roomId: string }; // data sent by frontend to connect to specific room
+export type LeaveRoom = { roomId: string };
+export type UserDisplayMap = { [userId: string]: UserDisplay }; // Map from userid to display name
 export type UserDisplay = {
     // user information
-    userid: string;
+    userId: string;
     displayName: string;
     color: string;
 };
 
-export type UserRoomMap = { [userid: string]: string[] }; // Map from userid to all connected roomids
-export type ConnectedUserMap = { [userid: string]: { accepted: boolean; displayName: UserDisplay } };
-export type RoomMap = { [roomid: string]: Room }; // All open rooms and relevant information
+export type UserRoomMap = { [userId: string]: string[] }; // Map from userid to all connected roomids
+export type ConnectedUserMap = { [userId: string]: { accepted: boolean; displayName: UserDisplay } };
+export type RoomMap = { [roomId: string]: Room }; // All open rooms and relevant information
 export type Room = {
-    roomid: string;
+    roomId: string;
     owner: string;
     requestSent: boolean;
     invited: ConnectedUserMap;
 };
 export type RoomInvite = {
-    roomid: string;
+    roomId: string;
 }
 export type RoomInviteResponse = {
     invitedBy: UserDisplay;
     respondedBy: UserDisplay;
-    roomid: string;
+    roomId: string;
 }
 export type Message = {
     sender: UserDisplay;
@@ -47,10 +47,10 @@ export type File = {
 // RTC STUFF
 export type SDP = {
     sdp: RTCSessionDescription;
-    roomid: string;
+    roomId: string;
 }
 
 export type IceCandidate = {
     candidate: RTCIceCandidate;
-    roomid: string;
+    roomId: string;
 }
